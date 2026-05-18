@@ -10,6 +10,18 @@
 
 **Verification note:** These deliverables are Markdown instruction files, not a code library — there is no pytest suite. Each task's "verify" steps use concrete shell checks (file exists, JSON/markdown well-formed, smoke-test of a non-paid code path). A full paid end-to-end run (real Lovart generation + Zoho scheduling) is explicitly a **user-gated manual step** (Task 14), never run automatically.
 
+## Plan Amendments (post-Task-1, 2026-05-18)
+
+Task 1 probed `lovartai/lovart-skill` and found the plan's Lovart assumptions wrong. **These amendments override Task 2, Task 4, and Task 11 wherever they conflict:**
+
+1. **No `openclaw skills list` / `npx skills add` reliance.** `npx skills add lovartai/lovart-skill` registers the skill *project-local* as `lovart-api` under `.agents/skills/`, does **not** appear in `openclaw skills list`, and — critically — **does not copy the `agent_skill.py` entrypoint**. It is unusable for a global skill.
+2. **`/lovart-video` bootstraps `agent_skill.py` itself.** The entrypoint is a single self-contained ~1000-line Python CLI. `/lovart-video` preflight fetches it once to a stable cache: `~/.cache/lovart-video/agent_skill.py` from `https://raw.githubusercontent.com/lovartai/lovart-skill/main/skills/lovart-skill/agent_skill.py`. No `npx`, no `openclaw skills` calls.
+3. **Reference flag is `--attachments <URL>...`** (CDN URLs, not local paths). Flow: `python3 agent_skill.py upload --file <localpath> --json` → read `.url` → pass URLs to `chat --attachments <url1> <url2> ...`.
+4. **Confirmed `agent_skill.py` interface:** subcommands include `chat upload confirm result status download projects ...`. `chat` flags: `--prompt --mode {fast,thinking} --attachments --prefer-models --json --download --output-dir --thread-id --project-id`. JSON output keys: `upload` → `result["url"]`; `chat`/`result` downloaded video → `result["downloaded"][i]["local_path"]`; success → `result["generation_succeeded"]`; high-cost gate → `result["final_status"] == "pending_confirmation"`.
+5. **Task 11 `.gitignore`** for `generate-posts-from-feed` must also ignore `.agents/` and `skills-lock.json` (npx-installer side-effects).
+
+The implementer dispatches for Tasks 2, 4, and 11 carry the corrected content.
+
 **Pre-existing state (already done during brainstorming):**
 - `~/gitrepos/lovart-video/` and `~/gitrepos/generate-posts-from-feed/` exist, each `git init`-ed on `main`.
 - The design spec is committed in `generate-posts-from-feed` at `docs/superpowers/specs/2026-05-18-generate-posts-from-feed-design.md`.
