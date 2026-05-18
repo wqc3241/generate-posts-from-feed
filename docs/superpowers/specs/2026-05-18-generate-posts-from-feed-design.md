@@ -150,7 +150,7 @@ last line so callers can capture it. Non-zero exit on failure.
 
 **Step 2 — Identify each product.** Fetch
 `https://nlpperformance.com/products/{handle}.json` → `title`, `vendor`,
-`product_type`, `tags`, `body_html`, `images[]`, `variants[]`, `handle`.
+`product_type`, `tags`, `body_html`, `images[]`, `handle`.
 
 **Step 3 — Identify the vehicle (priority chain, first hit wins).**
 1. **Title parse** — regex for year-range + make + model + engine
