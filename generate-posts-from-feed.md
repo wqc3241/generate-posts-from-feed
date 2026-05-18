@@ -43,16 +43,19 @@ Lovart instead of fal.ai Seedance.
 
 Determine the input type and build a list of product handles.
 
-```bash
-# Single/multiple product URLs:
-#   extract {handle} from each .../products/{handle}
-# Collection URL:
-curl -s "https://nlpperformance.com/collections/{handle}/products.json?limit=250&page=1" | jq -r '.products[].handle'
-#   repeat with page=2,3,... until an empty array is returned.
-# Feed file (.json): jq for product handles/urls.
-# Feed file (.xml): parse <link>/<g:link> entries for /products/{handle}.
-# Feed file (.csv): the column holding the product URL or handle.
-```
+- **Product URLs** (single or multiple): extract `{handle}` from each
+  `.../products/{handle}`.
+- **Collection URL:** page through
+  `https://nlpperformance.com/collections/{handle}/products.json?limit=250&page=N`,
+  incrementing `N` from 1, until a page returns an empty `products` array;
+  collect every handle. Each page:
+
+  ```bash
+  curl -s "https://nlpperformance.com/collections/{handle}/products.json?limit=250&page=N" | jq -r '.products[].handle'
+  ```
+- **Feed file (`.json`):** `jq` for product handles/urls.
+- **Feed file (`.xml`):** parse `<link>`/`<g:link>` entries for `/products/{handle}`.
+- **Feed file (`.csv`):** the column holding the product URL or handle.
 
 Dedupe the handle list. Apply `--limit` (keep the first N). If the input
 matches none of the patterns, STOP and tell the user the input was not
@@ -80,13 +83,49 @@ For each product, determine `{vehicle}` and record `vehicle_source`:
    known make and model in `title`, e.g. `16-23 Toyota Tacoma V6-3.5L`.
    Known makes: Toyota, Ford, Honda, Subaru, Chevrolet, Chevy, Jeep, RAM,
    Dodge, GMC, Nissan, Lexus, Mazda, Volkswagen, VW, BMW, Audi, Mercedes,
-   Hyundai, Kia, Ford, Tesla, Acura, Infiniti. Capture `{year_range} {make}
+   Hyundai, Kia, Tesla, Acura, Infiniti. Capture `{year_range} {make}
    {model}` (drop the engine code from `{vehicle}` but keep make+model).
 2. **Fitment table in `body_html`** (`vehicle_source = fitment-table`).
    If the title yields nothing, parse `body_html` for an HTML `<table>` whose
    header row contains Year/Make/Model columns; take the make+model (if
    multiple rows, use the most frequent make, and "multiple models" or the
-   single model). Use `python3` with the standard library `html.parser`.
+   single model). Pipe `body_html` into this `python3` script (standard
+   library `html.parser` only):
+
+   ```python
+   import sys
+   from html.parser import HTMLParser
+   from collections import Counter
+   class TableExtractor(HTMLParser):
+       def __init__(self):
+           super().__init__()
+           self.tables=[]; self._rows=None; self._cells=None; self._cur=[]; self._in=False
+       def handle_starttag(self,t,a):
+           if t=='table': self._rows=[]
+           elif t=='tr' and self._rows is not None: self._cells=[]
+           elif t in('td','th') and self._cells is not None: self._in=True; self._cur=[]
+       def handle_endtag(self,t):
+           if t=='table' and self._rows is not None: self.tables.append(self._rows); self._rows=None
+           elif t=='tr' and self._cells is not None: self._rows.append(self._cells); self._cells=None
+           elif t in('td','th') and self._in: self._cells.append(''.join(self._cur).strip()); self._in=False
+       def handle_data(self,d):
+           if self._in: self._cur.append(d)
+   p=TableExtractor(); p.feed(sys.stdin.read())
+   make=model=None
+   for rows in p.tables:
+       if not rows: continue
+       hdr=[c.lower() for c in rows[0]]
+       if 'make' in hdr and 'model' in hdr:
+           mi,mo=hdr.index('make'),hdr.index('model')
+           makes=[r[mi] for r in rows[1:] if len(r)>max(mi,mo) and r[mi]]
+           models=[r[mo] for r in rows[1:] if len(r)>max(mi,mo) and r[mo]]
+           if makes:
+               make=Counter(makes).most_common(1)[0][0]
+               uniq=list(dict.fromkeys(models))
+               model=uniq[0] if len(uniq)==1 else 'multiple models'
+           break
+   print(f"{make} {model}" if make else "")
+   ```
 3. **Product tags** (`vehicle_source = tags`). If still nothing, scan `tags`
    for any value matching a known make; pair with a model tag if present.
 4. **Else** `{vehicle}` is empty and `vehicle_source = universal`.
@@ -161,9 +200,10 @@ Invoke the video skill, passing any downloaded reference images:
 /lovart-video --prompt "<engineered prompt>" --ref /tmp/feed-media/product-{handle}/media-0.jpg [--ref ...] --out /tmp/feed-media/product-{handle}/raw.mp4
 ```
 
-Capture the path printed on `/lovart-video`'s last line. If it fails for a
-product, record the failure and skip that product's post (do not abort the
-whole run).
+`/lovart-video` accepts `--out` and prints the resulting absolute path on its
+last line — capture that printed path (it equals the `--out` value). If it
+fails for a product, record the failure and skip that product's post (do not
+abort the whole run).
 
 ## Step 6 — Branding overlay composite
 
@@ -177,14 +217,11 @@ frame: NLP logo (top-right), brand logo (top-left), product-name label
 mkdir -p ~/.claude/assets/brand-logos
 ```
 
-**NLP logo** — `~/.claude/assets/nlp-logo.png`. If missing, fetch the store
-logo once:
-```bash
-[ -f ~/.claude/assets/nlp-logo.png ] || \
-  WebFetch "https://nlpperformance.com" "Return the URL of the site header logo image." \
-  # then: curl -sL "<logo_url>" -o ~/.claude/assets/nlp-logo.png ; verify with `file`.
-```
-If it still cannot be obtained, skip the NLP overlay (do not abort).
+**NLP logo** — `~/.claude/assets/nlp-logo.png`. If
+`~/.claude/assets/nlp-logo.png` is absent, use the WebFetch tool on
+`https://nlpperformance.com` with a prompt asking for the site header logo
+image URL, then `curl -sL "<logo_url>" -o ~/.claude/assets/nlp-logo.png` and
+verify it with `file`. If unobtainable, skip the NLP overlay (do not abort).
 
 **Brand logo** — slug = `vendor` lowercased, non-alphanumeric → `-`
 (e.g. "K&N" → `k-n`). Path `~/.claude/assets/brand-logos/{slug}.png`.
@@ -197,9 +234,14 @@ brand overlay (do not abort).
 ImageMagick is not installed — use Pillow. Word-wrap so the label never
 exceeds 85% of the 720px canvas width:
 
-```python
+```bash
+HANDLE="<handle>"            # the current product handle
+SHORT_NAME="<product_short_name>"
+python3 - "$SHORT_NAME" "/tmp/feed-media/product-$HANDLE/label.png" <<'PY'
+import sys
 from PIL import Image, ImageDraw, ImageFont
-text = "<product_short_name>"
+text = sys.argv[1]
+out_path = sys.argv[2]
 canvas_w, font_size, max_lines = 720, 44, 3
 max_text_w = int(canvas_w * 0.85)  # 612px
 # font: try Inter Bold, fall back to Arial Bold, then PIL default.
@@ -239,13 +281,16 @@ for l in lines:
     d.text((x, y), l, font=font, fill=(255,255,255,255),
            stroke_width=3, stroke_fill=(0,0,0,255))
     y += line_h
-img.save("/tmp/feed-media/product-{handle}/label.png")
+img.save(out_path)
+PY
 ```
 
 ### 6c. Composite with ffmpeg
 
-Build the inputs and filtergraph from whichever overlays are available. With
-all three present:
+Pick the command matching which logos were obtained in Step 6a. The label PNG
+is always present; `[0:v]` is always the raw video.
+
+**All three (NLP + brand + label):**
 
 ```bash
 ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
@@ -253,8 +298,8 @@ ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
   -i ~/.claude/assets/brand-logos/{slug}.png \
   -i /tmp/feed-media/product-{handle}/label.png \
   -filter_complex "
-    [1:v]scale=180:-1[nlp];
-    [2:v]scale=180:-1[brand];
+    [1:v]scale=180:-2[nlp];
+    [2:v]scale=180:-2[brand];
     [0:v][brand]overlay=20:20[a];
     [a][nlp]overlay=W-w-20:20[b];
     [b][3:v]overlay=(W-w)/2:H-h-80[v]
@@ -262,10 +307,44 @@ ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
   /tmp/feed-media/product-{handle}/{handle}.mp4
 ```
 
-If the NLP logo is missing, drop input `-i nlp-logo.png` and the `[nlp]` /
-`overlay=W-w-20:20` nodes. If the brand logo is missing, drop input
-`-i brand-logos/{slug}.png` and the `[brand]` / `overlay=20:20` nodes,
-re-chaining the remaining overlays. The label PNG is always present.
+**NLP + label only (brand logo missing):**
+
+```bash
+ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
+  -i ~/.claude/assets/nlp-logo.png \
+  -i /tmp/feed-media/product-{handle}/label.png \
+  -filter_complex "
+    [1:v]scale=180:-2[nlp];
+    [0:v][nlp]overlay=W-w-20:20[a];
+    [a][2:v]overlay=(W-w)/2:H-h-80[v]
+  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
+  /tmp/feed-media/product-{handle}/{handle}.mp4
+```
+
+**Brand + label only (NLP logo missing):**
+
+```bash
+ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
+  -i ~/.claude/assets/brand-logos/{slug}.png \
+  -i /tmp/feed-media/product-{handle}/label.png \
+  -filter_complex "
+    [1:v]scale=180:-2[brand];
+    [0:v][brand]overlay=20:20[a];
+    [a][2:v]overlay=(W-w)/2:H-h-80[v]
+  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
+  /tmp/feed-media/product-{handle}/{handle}.mp4
+```
+
+**Label only (both logos missing):**
+
+```bash
+ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
+  -i /tmp/feed-media/product-{handle}/label.png \
+  -filter_complex "
+    [0:v][1:v]overlay=(W-w)/2:H-h-80[v]
+  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
+  /tmp/feed-media/product-{handle}/{handle}.mp4
+```
 
 ## Step 7 — Generate post content
 
@@ -282,8 +361,12 @@ Follow us for more promotions and content.
 ```
 
 - `value_prop` — pick ONE: "best deal on the market", "average 2-day
-  shipping to major US states", "built to last". Do NOT use
-  "customer-approved" or "verified 5-star" (no review evidence here).
+  shipping to major US states", "built to last". Choose by category: if
+  `product_type` or title indicates suspension, coilovers, sway bar, or
+  brakes → `built to last`; otherwise → `best deal on the market`. Use
+  `average 2-day shipping to major US states` only when the user explicitly
+  asks for shipping-focused copy. Do NOT use "customer-approved" or
+  "verified 5-star" (no review evidence here).
 - `hashtags` — 10–15 tags: brand tag from `vendor` (e.g. K&N → `#KNFilters`,
   Whiteline → `#Whiteline`), category tag from `product_type` (e.g. Intake →
   `#ColdAirIntake`), vehicle tag(s) (`#Tacoma`, `#ToyotaTacoma`), then always
@@ -332,17 +415,21 @@ JSON shape:
 The Markdown file lists each post with schedule time, vehicle, vehicle/image
 source, video path, caption, first comment, and YouTube title.
 
+The `caption` field contains the full caption text including hashtags (as
+built in Step 7). The separate `hashtags` field is a convenience copy for
+`/zoho-social-batch`; do not strip hashtags out of `caption`.
+
 ## Step 9 — Present for approval
 
 Display the Markdown queue and ask the user:
-"N posts generated. Review `.claude/plans/feed-post-queue-{date}.md`. Approve
+"N posts generated. Review `.claude/plans/feed-post-queue-{YYYYMMDD}.md`. Approve
 all, or specify post numbers (e.g. `approve 1,3,5-10`)."
 
 ## Step 10 — Schedule via /zoho-social-batch
 
 On approval, run:
 ```
-/zoho-social-batch .claude/plans/feed-post-queue-{date}.json
+/zoho-social-batch .claude/plans/feed-post-queue-{YYYYMMDD}.json
 ```
 with `schedule_mode: scheduled` so each post lands at its `schedule_at`.
 Cadence is 1/day at 9 PM EDT, starting the day after the last already-
