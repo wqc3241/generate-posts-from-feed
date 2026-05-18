@@ -250,3 +250,123 @@ the last already-scheduled post. Parent skill's strict schedule rules apply.
 - Each repo contains its skill `.md` at the repo root, a README, and a
   LICENSE. The `generate-posts-from-feed` repo additionally holds this spec.
 - Each skill `.md` is symlinked into `~/.claude/commands/` for live global use.
+
+## Implementation notes
+
+_Recorded by Task 1 probe (2026-05-18). These are facts observed from the actual
+installed skill — not inferred from docs._
+
+### Install outcome
+
+`npx -y skills add lovartai/lovart-skill` succeeded but registered the skill as
+**`lovart-api`** (not `lovart-skill`), installed to:
+
+```
+./.agents/skills/lovart-api/
+```
+
+Only markdown files were copied by the installer (README.md, README_CN.md,
+README_JA.md, README_TW.md, SKILL.md). The Python client `agent_skill.py` was
+**not** copied despite being present in the GitHub repo at
+`skills/lovart-skill/agent_skill.py`. It was manually downloaded from:
+
+```
+https://raw.githubusercontent.com/lovartai/lovart-skill/main/skills/lovart-skill/agent_skill.py
+```
+
+`openclaw skills list` returned no output (empty — `lovart-api` is a project-level
+skill installed to `.agents/skills/`, not a global openclaw plugin-skill).
+
+### Resolved entrypoint path
+
+```
+/Volumes/Storage/gitrepos/generate-posts-from-feed/.agents/skills/lovart-api/agent_skill.py
+```
+
+In the SKILL.md, `{baseDir}` resolves to the skill directory:
+`.agents/skills/lovart-api/` relative to the project root.
+
+For the `/lovart-video` skill file (which lives in its own repo), the entrypoint
+will be wherever `lovart-api` is installed in that repo:
+`.agents/skills/lovart-api/agent_skill.py`.
+
+### `chat` subcommand — exact flags
+
+```
+python3 agent_skill.py chat
+  --prompt PROMPT            (required)
+  --project-id PROJECT_ID
+  --thread-id THREAD_ID
+  --attachments [URL ...]    (reference images/videos, CDN URLs)
+  --json
+  --download
+  --output-dir OUTPUT_DIR
+  --prefer-models JSON       e.g. '{"VIDEO":["generate_video_kling_3_0"]}'
+  --include-tools [TOOL ...] e.g. upscale_image
+  --exclude-tools [TOOL ...]
+  --mode {thinking,fast}
+```
+
+**There is no `--ref`, `--image`, or `--images` flag.** Reference files are
+passed as CDN URLs via `--attachments` after uploading with the `upload` subcommand.
+
+### `upload` subcommand — exact invocation and JSON output
+
+```bash
+python3 agent_skill.py upload --file /path/to/file.png
+```
+
+Returns (printed to stdout):
+```json
+{"url": "https://assets-persist.lovart.ai/img/{user_uuid}/xxx.png"}
+```
+
+The CDN URL is in the top-level `"url"` key.
+
+### `chat --json` output structure
+
+```json
+{
+  "thread_id": "xxx",
+  "status": "done",
+  "project_id": "xxx",
+  "final_status": "done",
+  "generation_succeeded": true,
+  "items": [
+    {"type": "assistant", "text": "Agent's reply"},
+    {"type": "generator", "name": "artifacts", "artifacts": [
+      {"type": "image", "content": "https://assets-persist.lovart.ai/artifacts/agent/xxx.png"},
+      {"type": "video", "content": "https://assets-persist.lovart.ai/artifacts/agent/xxx.mp4"}
+    ]}
+  ],
+  "downloaded": [
+    {"type": "video", "url": "https://...", "local_path": "/tmp/openclaw/lovart_ab12cd.mp4", "new": true}
+  ]
+}
+```
+
+Key facts for Task 2:
+- Downloaded video path: `result["downloaded"][i]["local_path"]` (string, absolute path)
+- CDN URL of artifact: `result["items"][i]["artifacts"][j]["content"]`
+- Success check: `result["generation_succeeded"]` (bool; `False` + `result["warning"]` on silent failure)
+- High-cost gate: `result["final_status"] == "pending_confirmation"` → must call `confirm --thread-id`
+
+### Top-level subcommands (from `--help`)
+
+`chat`, `send`, `watch`, `create-project`, `upload-artifact`, `upload`,
+`confirm`, `set-mode`, `query-mode`, `status`, `result`, `download`, `config`,
+`projects`, `project-add`, `project-switch`, `project-rename`, `project-remove`,
+`threads`, `thread-remove`
+
+### Action required for Task 2
+
+When writing the `/lovart-video` skill, the entrypoint invocation pattern is:
+
+```bash
+python3 {baseDir}/agent_skill.py chat --prompt "..." --attachments CDN_URL [...] \
+  --json --download --output-dir /tmp/openclaw
+```
+
+where `{baseDir}` is replaced by openclaw with the absolute path to the skill
+directory at runtime. Reference images must be uploaded first (`upload --file`)
+to obtain CDN URLs, then passed to `--attachments`.
