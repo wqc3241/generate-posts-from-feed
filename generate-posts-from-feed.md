@@ -194,10 +194,25 @@ photorealistic, premium confident energy. {ambience_cue}. No text overlays,
 no logos, no watermarks — added in post.
 ```
 
+**Lovart settings (fixed for this skill).** Every `/lovart-video` call this
+skill makes passes these three options, so the generation runs in the right
+Lovart project with the intended model and reasoning depth:
+
+- `--mode thinking` — deep structured reasoning.
+- `--project-id e38875ee330f4140bf024d880d644ab3` — the NLP Performance
+  promo-video project in the Lovart workspace.
+- `--prefer-models '{"VIDEO":["generate_video_seedance_v2"]}'` — soft
+  preference for the Seedance 2.0 Fast video model.
+
 Invoke the video skill, passing any downloaded reference images:
 
 ```
-/lovart-video --prompt "<engineered prompt>" --ref /tmp/feed-media/product-{handle}/media-0.jpg [--ref ...] --out /tmp/feed-media/product-{handle}/raw.mp4
+/lovart-video --prompt "<engineered prompt>" \
+  --ref /tmp/feed-media/product-{handle}/media-0.jpg [--ref ...] \
+  --out /tmp/feed-media/product-{handle}/raw.mp4 \
+  --mode thinking \
+  --prefer-models '{"VIDEO":["generate_video_seedance_v2"]}' \
+  --project-id e38875ee330f4140bf024d880d644ab3
 ```
 
 `/lovart-video` accepts `--out` and prints the resulting absolute path on its
