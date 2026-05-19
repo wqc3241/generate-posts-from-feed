@@ -170,17 +170,22 @@ last line so callers can capture it. Non-zero exit on failure.
    Record `image_source` (`shopify` | `web-search` | `none`).
 
 **Step 5 — Generate the 8s promo video** via `/lovart-video`.
-Engineer a fixed **three-act** prompt per product (only `product_short_name`,
-`product_kind`, `scene_vehicle`, and `ambience_cue` are substituted, so it
-works for any vehicle part): seconds 0–1 a clean centered product hero on a
-dark gradient; seconds 1–4 an ultra-realistic multi-angle overview of the
-vehicle; seconds 4–8 close-up multi-angle shots of the product **installed on
-the vehicle** at its correct mounting location. Vertical 9:16, 720p, one
-ultra-realistic shop garage, very smooth camera, with the negative-overlay
-clause ("no text, no logos — added in post"). Lovart calls are pinned to
-`--mode thinking`, the NLP promo `--project-id`, and a Seedance 2.0 Fast
-`--prefer-models` hint. Downloaded product images are passed as `--ref`.
-Output to `/tmp/feed-media/product-{handle}/raw.mp4`.
+Engineer a fixed **two-layer staged** prompt per product (only
+`product_short_name`, `product_kind`, `scene_vehicle`, and `ambience_cue` are
+substituted, so it works for any vehicle part). The scene is held for the whole
+clip: **foreground** — the product resting on the garage floor, rendered as
+close to the reference image as the model allows; **background** — the vehicle
+parked behind it. Seconds 0–1 frame the product centered at modest scale (room
+for the title card); seconds 1–8 are a smooth slow orbit/push-in around the
+staged product with the vehicle visible behind. The part is **never shown
+mounted on the vehicle** — an AI video model cannot reproduce a part's exact
+shape or its real mounting location, so depicting installation hallucinates
+the part and places it wrong; the staged two-layer scene avoids that entirely.
+Vertical 9:16, 720p, one ultra-realistic shop garage, very smooth camera, with
+the negative-overlay clause. Lovart calls are pinned to `--mode thinking`, the
+NLP promo `--project-id`, and a Seedance 2.0 Fast `--prefer-models` hint.
+Downloaded product images are passed as `--ref`. Output to
+`/tmp/feed-media/product-{handle}/raw.mp4`.
 
 **Step 6 — Title-card + branding overlay.** Lovart renders all 8s clean; the
 branding is composited in post. A full-canvas 720×1280 title-card PNG (shop

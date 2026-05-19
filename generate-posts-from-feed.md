@@ -169,9 +169,17 @@ If 4a and 4b both fail, the Lovart prompt runs text-only.
 
 ## Step 5 — Generate the 8-second promo video
 
-For each product, build a three-act prompt and call `/lovart-video`. Lovart
-renders the full 8 seconds of clean footage; the branded title-card text is
-overlaid afterward in Step 6.
+For each product, build a **two-layer staged** prompt and call `/lovart-video`.
+Lovart renders the full 8 seconds of clean footage; the branded title-card text
+is overlaid afterward in Step 6.
+
+**Why two-layer staging (not "installed on the vehicle"):** an AI video model
+cannot reproduce a specific part's exact shape or know its real mounting
+location, so "installed on the vehicle" footage hallucinates the part and
+places it wrong. The fixed staging instead shows the product **on the garage
+floor in the foreground** with the **vehicle parked behind it** — no mounting
+is depicted, so there is nothing to get wrong. The reference images are still
+passed to anchor the part's appearance as closely as the model allows.
 
 **`product_short_name`** = `title` with the leading SKU/year/model prefix
 stripped (e.g. "K&N 16-23 Toyota Tacoma V6-3.5L Elevated Intake Kit (Snorkel)"
@@ -190,25 +198,27 @@ otherwise the literal phrase `a matching performance vehicle`.
 - brakes → `brake disc rotation hiss, subtle impact clicks`
 - other/accessory → `subtle workshop ambience, tools on metal`
 
-**Three-act prompt template** (keep under 500 chars). This template is fixed —
-only `product_short_name`, `product_kind`, `scene_vehicle`, and `ambience_cue`
-are substituted, so it works for any kind of vehicle part:
+**Two-layer staged prompt template.** This template is fixed — only
+`product_short_name`, `product_kind`, `scene_vehicle`, and `ambience_cue` are
+substituted, so it works for any kind of vehicle part:
 
 ```
-Vertical 9:16 720p 8-second cinematic product reel, set in one ultra-realistic
-modern performance shop garage, very smooth continuous camera motion,
-photorealistic. Seconds 0-1: clean centered hero shot of {product_short_name}
-({product_kind}) shown at modest scale, occupying only the central third of
-the vertical frame with generous empty space above and below it, on a dark
-gradient backdrop. Seconds 1-4: ultra-realistic multi-angle orbiting overview
-of {scene_vehicle}. Seconds 4-8: smooth close-up multi-angle shots of the
-{product_kind} already installed on {scene_vehicle} at its correct mounting
-location. {ambience_cue}. No text, no logos, no watermarks — added in post.
-Render with the Seedance 2.0 Fast video model.
+Vertical 9:16 720p 8-second cinematic product reel in one ultra-realistic
+performance shop garage. A two-layer staged scene held for the whole clip:
+FOREGROUND — the {product_short_name} ({product_kind}), rendered exactly like
+the reference image (identical shape, proportions, colour and finish — do not
+redesign or reinterpret the part), resting on the polished garage floor;
+BACKGROUND — a {scene_vehicle} parked a few metres behind it. Seconds 0-1: the
+product centered at modest scale with clear empty space above and below it.
+Seconds 1-8: very smooth slow cinematic camera — a gentle orbit and push-in
+around the staged product, the vehicle always visible behind. Soft lighting,
+shallow depth of field, photorealistic, premium. {ambience_cue}. The part is
+never attached to or mounted on the vehicle. No text, no logos, no watermarks
+— added in post. Render with the Seedance 2.0 Fast video model.
 ```
 
-The "central third" framing in seconds 0–1 is deliberate: it leaves clear
-space at the top for the title-card logo and below for the product name.
+The seconds 0–1 framing keeps the product at modest scale with empty space
+above and below so the title-card logo and product name overlay cleanly.
 
 The final sentence — `Render with the Seedance 2.0 Fast video model.` — is
 part of the prompt on purpose: the Lovart agent resolves the video model by
