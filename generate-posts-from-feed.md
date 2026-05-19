@@ -345,11 +345,16 @@ The title-card PNG shows only during seconds 0–1 (fading in then out); a small
 shop logo stays top-right for the whole clip. The raw video is first
 normalized to exactly 720×1280. Output is capped at 8 seconds.
 
+`-loop 1` on the title-card input is required: it turns the still PNG into a
+continuous stream so the `fade` filter animates over time. Without it, `fade`
+evaluates the single frame at t=0 (alpha 0) and the whole overlay renders
+invisible.
+
 **With the NLP logo:**
 
 ```bash
 ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
-  -i /tmp/feed-media/product-{handle}/titlecard.png \
+  -loop 1 -i /tmp/feed-media/product-{handle}/titlecard.png \
   -i ~/.claude/assets/nlp-logo.png \
   -filter_complex "
     [0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1[base];
@@ -366,7 +371,7 @@ and the watermark nodes; the title-card overlay output is named `[v]` directly:
 
 ```bash
 ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
-  -i /tmp/feed-media/product-{handle}/titlecard.png \
+  -loop 1 -i /tmp/feed-media/product-{handle}/titlecard.png \
   -filter_complex "
     [0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1[base];
     [1:v]format=rgba,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=0.85:d=0.15:alpha=1[tc];
