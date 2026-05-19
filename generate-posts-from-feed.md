@@ -346,10 +346,22 @@ if os.path.isfile(logo_path):
     except Exception:
         pass
 
-# product name, upper-middle
-draw_centered(wrap(short_name, load_font(52), int(W * 0.86), 2), load_font(52), 330)
+# product name, upper-middle — auto-shrink the font so a long name fits in
+# up to 3 lines without truncation
+mw = int(W * 0.86)
+name_lines = name_font = None
+for size in (54, 50, 46, 42, 38):
+    fnt = load_font(size)
+    ls = wrap(short_name, fnt, mw, 3)
+    if "…" not in "".join(ls) and len(" ".join(ls).split()) == len(short_name.split()):
+        name_lines, name_font = ls, fnt
+        break
+if name_lines is None:
+    name_font = load_font(38)
+    name_lines = wrap(short_name, name_font, mw, 3)
+draw_centered(name_lines, name_font, 330)
 # tagline, lower
-draw_centered(wrap(tagline, load_font(40), int(W * 0.86), 1), load_font(40), 1080)
+draw_centered(wrap(tagline, load_font(40), mw, 2), load_font(40), 1040)
 
 img.save(out_path)
 PY
