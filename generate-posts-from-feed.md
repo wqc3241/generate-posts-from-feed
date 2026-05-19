@@ -198,13 +198,17 @@ are substituted, so it works for any kind of vehicle part:
 Vertical 9:16 720p 8-second cinematic product reel, set in one ultra-realistic
 modern performance shop garage, very smooth continuous camera motion,
 photorealistic. Seconds 0-1: clean centered hero shot of {product_short_name}
-({product_kind}) floating on a dark gradient backdrop. Seconds 1-4:
-ultra-realistic multi-angle orbiting overview of {scene_vehicle}. Seconds 4-8:
-smooth close-up multi-angle shots of the {product_kind} already installed on
-{scene_vehicle} at its correct mounting location. {ambience_cue}. No text, no
-logos, no watermarks — added in post. Render with the Seedance 2.0 Fast video
-model.
+({product_kind}) shown at modest scale, occupying only the central third of
+the vertical frame with generous empty space above and below it, on a dark
+gradient backdrop. Seconds 1-4: ultra-realistic multi-angle orbiting overview
+of {scene_vehicle}. Seconds 4-8: smooth close-up multi-angle shots of the
+{product_kind} already installed on {scene_vehicle} at its correct mounting
+location. {ambience_cue}. No text, no logos, no watermarks — added in post.
+Render with the Seedance 2.0 Fast video model.
 ```
+
+The "central third" framing in seconds 0–1 is deliberate: it leaves clear
+space at the top for the title-card logo and below for the product name.
 
 The final sentence — `Render with the Seedance 2.0 Fast video model.` — is
 part of the prompt on purpose: the Lovart agent resolves the video model by
@@ -320,13 +324,25 @@ def draw_centered(lines, fnt, y, gap=12):
         y += h + gap
     return y
 
-# shop logo, centered in the top band
+# shop logo on a contrast panel, centered in the top band.
+# The logo PNG has a transparent background; a dark logo would vanish on the
+# dark first-second footage, so it always sits on a rounded contrast panel:
+# light panel for a dark logo, dark panel for a light logo.
 if os.path.isfile(logo_path):
     try:
         logo = Image.open(logo_path).convert("RGBA")
-        lw = 300
-        logo = logo.resize((lw, max(1, round(logo.height * lw / logo.width))))
-        img.alpha_composite(logo, ((W - lw) // 2, 70))
+        lw = 280
+        lh = max(1, round(logo.height * lw / logo.width))
+        logo = logo.resize((lw, lh))
+        vis = [(r, g, b) for r, g, b, a in logo.getdata() if a > 40]
+        lum = sum(0.299*r + 0.587*g + 0.114*b for r, g, b in vis) / len(vis) if vis else 255
+        pad, radius, top = 28, 22, 60
+        pw, ph = lw + pad * 2, lh + pad * 2
+        px0, py0 = (W - pw) // 2, top
+        panel = (255, 255, 255, 235) if lum < 110 else (16, 16, 22, 210)
+        ImageDraw.Draw(img).rounded_rectangle(
+            [px0, py0, px0 + pw, py0 + ph], radius=radius, fill=panel)
+        img.alpha_composite(logo, (px0 + pad, py0 + pad))
     except Exception:
         pass
 
