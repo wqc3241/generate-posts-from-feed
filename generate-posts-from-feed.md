@@ -212,10 +212,17 @@ BACKGROUND — a {scene_vehicle} parked a few metres behind it. Seconds 0-1: the
 product centered at modest scale with clear empty space above and below it.
 Seconds 1-8: very smooth slow cinematic camera — a gentle orbit and push-in
 around the staged product, the vehicle always visible behind. Soft lighting,
-shallow depth of field, photorealistic, premium. {ambience_cue}. The part is
-never attached to or mounted on the vehicle. No text, no logos, no watermarks
-— added in post. Render with the Seedance 2.0 Fast video model.
+shallow depth of field, photorealistic, premium. Make sure the content in the
+video follows real-world physics logic. {ambience_cue} — make sure the audio
+fits the auto-performance vibe. The part is never attached to or mounted on
+the vehicle. No text, no logos, no watermarks — added in post. Render with the
+Seedance 2.0 Fast video model.
 ```
+
+The real-world-physics sentence and the audio-vibe clause are fixed parts of
+the template — keep both verbatim on every generation so the model anchors
+motion, weight, lighting and reflections to plausible physics and the
+soundtrack matches an automotive-performance feel.
 
 The seconds 0–1 framing keeps the product at modest scale with empty space
 above and below so the title-card logo and product name overlay cleanly.
