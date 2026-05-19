@@ -199,18 +199,26 @@ photorealistic. Seconds 0-1: clean centered hero shot of {product_short_name}
 ultra-realistic multi-angle orbiting overview of {scene_vehicle}. Seconds 4-8:
 smooth close-up multi-angle shots of the {product_kind} already installed on
 {scene_vehicle} at its correct mounting location. {ambience_cue}. No text, no
-logos, no watermarks — added in post.
+logos, no watermarks — added in post. Render with the Seedance 2.0 Fast video
+model.
 ```
 
+The final sentence — `Render with the Seedance 2.0 Fast video model.` — is
+part of the prompt on purpose: the Lovart agent resolves the video model by
+name from the prompt text, which is the reliable channel. Keep it verbatim.
+
 **Lovart settings (fixed for this skill).** Every `/lovart-video` call this
-skill makes passes these three options, so the generation runs in the right
-Lovart project with the intended model and reasoning depth:
+skill makes passes these options, so the generation runs in the right Lovart
+project with the intended model and reasoning depth:
 
 - `--mode thinking` — deep structured reasoning.
 - `--project-id e38875ee330f4140bf024d880d644ab3` — the NLP Performance
   promo-video project in the Lovart workspace.
-- `--prefer-models '{"VIDEO":["generate_video_seedance_v2"]}'` — soft
-  preference for the Seedance 2.0 Fast video model.
+- `--prefer-models '{"VIDEO":["generate_video_seedance_v2"]}'` — a secondary
+  soft hint toward Seedance. `prefer-models` needs an internal tool identifier
+  that Lovart does not expose, so this is best-effort only; the in-prompt
+  "Seedance 2.0 Fast" sentence above is the channel that actually selects the
+  model.
 
 Invoke the video skill, passing any downloaded reference images:
 
