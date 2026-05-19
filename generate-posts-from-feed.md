@@ -357,7 +357,7 @@ ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
     [base][tc]overlay=0:0:enable='between(t,0,1)'[a];
     [2:v]scale=96:-2[wm];
     [a][wm]overlay=W-w-24:24[v]
-  " -map "[v]" -map 0:a? -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
+  " -map "[v]" -map "0:a?" -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
   /tmp/feed-media/product-{handle}/{handle}.mp4
 ```
 
@@ -371,7 +371,7 @@ ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
     [0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1[base];
     [1:v]format=rgba,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=0.85:d=0.15:alpha=1[tc];
     [base][tc]overlay=0:0:enable='between(t,0,1)'[v]
-  " -map "[v]" -map 0:a? -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
+  " -map "[v]" -map "0:a?" -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
   /tmp/feed-media/product-{handle}/{handle}.mp4
 ```
 
