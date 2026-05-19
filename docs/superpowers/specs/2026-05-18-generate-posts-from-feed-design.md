@@ -191,30 +191,31 @@ top-right. The raw video is normalized to exactly 720×1280 and capped at 8s.
 Produces the final `{handle}.mp4`. Reuses `~/.claude/assets/nlp-logo.png` and
 the Inter Bold font.
 
-**Step 7 — Generate post content** (product/vehicle-led; no customer quote).
-- Caption:
-  ```
-  Upgrade your {vehicle} 🔧 {product_short_name} — {value_prop}.
-
-  Follow us for more promotions and content.
-
-  {hashtags}
-  ```
-  For `universal` products the vehicle clause is dropped.
-- `value_prop` — one of: "best deal on the market", "average 2-day shipping
-  to major US states", "built to last". ("customer-approved" / "verified
-  5-star" are NOT used here — there is no review evidence.)
-- Hashtags (10–15): brand tag from `vendor`, category tag from
+**Step 7 — Generate post content** (product/vehicle-led, feature-forward; no
+customer quote). Produces five fields per product:
+- **Feature highlights** — 2–4 short selling points pulled from `body_html`,
+  or, when the description is sparse (catalog products often carry only a
+  fitment table), derived from `vendor` / `product_type` / title keywords.
+  No fabricated numeric specs or discount percentages.
+- `caption` — trending social-post body: hook + emoji-bulleted feature
+  highlights + a `value_prop` line + the follow-us footer. Drops the vehicle
+  clause when `universal`. **Contains no hashtags** — `/zoho-social-batch`
+  appends the `hashtags` field to the message itself.
+- `hashtags` (10–15): brand tag from `vendor`, category tag(s) from
   `product_type`, vehicle tag(s), plus the fixed set
   `#CarCommunity #ModdedCars #AutoParts #PerformanceParts #NLPPerformance`.
-- First comment: `Shop {product_short_name} 👇 {product_url}` followed by
-  `Follow us for more promotions and content.`
-- YouTube title (≤100 chars): `{product_short_name} for {vehicle} — Promo`.
+- `yt_title` — YouTube Shorts title (≤100 chars), keyword-front-loaded.
+- `yt_description` — fuller trending YouTube Shorts description: feature
+  highlights, the product link, value line, footer, and hashtags.
+- `first_comment` — `Shop {product_short_name} 👇 {product_url}` + footer.
 
-**Step 8 — Write manifest.** Dual output (same as parent):
+**Step 8 — Write manifest.** Dual output:
 `.claude/plans/feed-post-queue-{YYYYMMDD}.md` (human review) and `.json`
-(for `/zoho-social-batch`). The JSON per-post object adds: `vehicle`,
-`vehicle_source`, `image_source`, `video_engine: "lovart"`.
+(for `/zoho-social-batch`). The JSON uses `schedule_mode: spaced` (so the
+batch skill auto-resolves the next free 9 PM EDT slot) and each post object
+carries `video`, `caption`, `hashtags`, `first_comment`, `yt_title`,
+`yt_description`, `vehicle`, `vehicle_source`, `image_source`, and
+`video_engine: "lovart"`.
 
 **Step 9 — Approval gate.** Display the Markdown queue; user approves all or
 a subset (`approve 1,3,5-10`).

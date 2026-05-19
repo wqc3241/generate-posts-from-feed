@@ -382,42 +382,95 @@ ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
 
 ## Step 7 — Generate post content
 
-Product/vehicle-led (there is no customer quote).
+Product/vehicle-led and feature-forward (there is no customer quote). Produce
+five fields per product: `caption`, `hashtags`, `yt_title`, `yt_description`,
+`first_comment`.
 
-**Caption** (drop the "for your {vehicle}" clause when `universal`):
+### 7a. Gather feature highlights
+
+Collect 2–4 short feature highlights for the product:
+
+1. **From `body_html`** — if it carries a real description or bullet list,
+   pull the 2–4 most concrete selling points (strip HTML; ignore the fitment
+   table).
+2. **Sparse-description fallback** — many catalog products carry only a
+   fitment table. Derive 2–3 category-true highlights from `vendor`,
+   `product_type`, and title keywords: coilovers → adjustable ride height +
+   road/track-tuned damping; intake → increased airflow + bolt-on install;
+   brakes → stronger, more consistent stopping power; wheels → lightweight +
+   strength; exhaust → improved flow + sound.
+
+**Never fabricate numeric specs** — no "30-way adjustable", "+15 hp", and no
+discount percentage — unless the figure literally appears in the product data.
+
+### 7b. `caption` — social post body (Facebook / Instagram / TikTok)
+
+Trending, scroll-stopping style: a hook, the highlights as short emoji
+bullets, the value line, then the footer. Drop the `for your {vehicle}`
+clause when `universal`. **The caption does NOT contain hashtags** —
+`/zoho-social-batch` appends the `hashtags` field to the post message itself.
 
 ```
-Upgrade your {vehicle} 🔧 {product_short_name} — {value_prop}.
+{hook} — {product_short_name} for your {vehicle}.
+
+🔧 {highlight 1}
+⚡ {highlight 2}
+✅ {highlight 3}
+
+{value_prop}.
 
 Follow us for more promotions and content.
+```
+
+`hook` = a short punchy line (`Dial in your {vehicle}`, `Built to perform`,
+`Upgrade day`). `value_prop` — pick ONE: "best deal on the market",
+"average 2-day shipping to major US states", "built to last". Choose by
+category: suspension / coilovers / sway bar / brakes → `built to last`;
+otherwise → `best deal on the market`. Never use "customer-approved" or
+"verified 5-star" (no review evidence here).
+
+### 7c. `hashtags` — tags for all social posts
+
+10–15 tags: brand tag from `vendor` (K&N → `#KNFilters`, Öhlins → `#Ohlins`),
+category tag(s) from `product_type` (Intake → `#ColdAirIntake`), vehicle
+tag(s) (`#Tacoma`, `#ToyotaTacoma`), then always append
+`#CarCommunity #ModdedCars #AutoParts #PerformanceParts #NLPPerformance`.
+
+### 7d. `yt_title` — YouTube Shorts title (≤100 chars)
+
+Keyword-front-loaded and punchy:
+`{product_short_name} — {vehicle} | NLP Performance` (drop the vehicle when
+`universal`). Trim to ≤100 characters.
+
+### 7e. `yt_description` — YouTube Shorts description
+
+A fuller, trending description that highlights the features and links to the
+product (hashtags ARE included here — they belong in a YouTube description):
+
+```
+{product_short_name} — upgrade your {vehicle}.
+
+✅ {highlight 1}
+✅ {highlight 2}
+✅ {highlight 3}
+
+🛒 Shop now: {product_url}
+
+{value_prop}. Follow us for more promotions and content.
 
 {hashtags}
 ```
 
-- `value_prop` — pick ONE: "best deal on the market", "average 2-day
-  shipping to major US states", "built to last". Choose by category: if
-  `product_type` or title indicates suspension, coilovers, sway bar, or
-  brakes → `built to last`; otherwise → `best deal on the market`. Use
-  `average 2-day shipping to major US states` only when the user explicitly
-  asks for shipping-focused copy. Do NOT use "customer-approved" or
-  "verified 5-star" (no review evidence here).
-- `hashtags` — 10–15 tags: brand tag from `vendor` (e.g. K&N → `#KNFilters`,
-  Whiteline → `#Whiteline`), category tag from `product_type` (e.g. Intake →
-  `#ColdAirIntake`), vehicle tag(s) (`#Tacoma`, `#ToyotaTacoma`), then always
-  append `#CarCommunity #ModdedCars #AutoParts #PerformanceParts #NLPPerformance`.
+### 7f. `first_comment`
 
-**First comment:**
 ```
 Shop {product_short_name} 👇 {product_url}
 
 Follow us for more promotions and content.
 ```
 
-**YouTube title** (≤100 chars): `{product_short_name} for {vehicle} — Promo`
-(drop "for {vehicle}" when `universal`).
-
-Before finalizing, scan generated content and ERROR if it contains a
-fabricated discount percentage.
+Before finalizing, scan all generated content and ERROR if it contains a
+fabricated discount percentage or a fabricated numeric spec.
 
 ## Step 8 — Write the manifest
 
@@ -425,18 +478,25 @@ Write BOTH files (dual output):
 - `.claude/plans/feed-post-queue-{YYYYMMDD}.md` — human-readable queue.
 - `.claude/plans/feed-post-queue-{YYYYMMDD}.json` — for `/zoho-social-batch`.
 
+The JSON uses `schedule_mode: spaced` so `/zoho-social-batch` resolves the
+**next available 21:00 EDT slot** automatically — it reads the last scheduled
+Zoho post and starts the day after. Do not hand-compute `schedule_at` dates.
+
 JSON shape:
 ```json
 {
-  "schedule_mode": "scheduled",
+  "schedule_mode": "spaced",
+  "interval_hours": 24,
+  "time_of_day": "21:00",
+  "timezone": "America/New_York",
   "posts": [
     {
-      "schedule_at": "2026-05-19 21:00 EDT",
       "video": "/tmp/feed-media/product-{handle}/{handle}.mp4",
       "caption": "...",
       "hashtags": "#... #...",
       "first_comment": "Shop ... 👇 https://...",
-      "yt_title": "... — Promo",
+      "yt_title": "... | NLP Performance",
+      "yt_description": "...",
       "vehicle": "16-23 Toyota Tacoma",
       "vehicle_source": "title",
       "image_source": "shopify",
@@ -446,12 +506,15 @@ JSON shape:
 }
 ```
 
-The Markdown file lists each post with schedule time, vehicle, vehicle/image
-source, video path, caption, first comment, and YouTube title.
+The Markdown file lists each post with vehicle, vehicle/image source, video
+path, caption, hashtags, first comment, YouTube Shorts title, and YouTube
+description.
 
-The `caption` field contains the full caption text including hashtags (as
-built in Step 7). The separate `hashtags` field is a convenience copy for
-`/zoho-social-batch`; do not strip hashtags out of `caption`.
+`caption`, `hashtags`, and `yt_description` are kept as separate fields
+because `/zoho-social-batch` composes them per channel: the social post
+message is `caption + "\n\n" + hashtags`, so **`caption` must not already
+contain hashtags**. `yt_description` is used verbatim as the YouTube Shorts
+description and already includes hashtags (Step 7e).
 
 ## Step 9 — Present for approval
 
@@ -465,9 +528,10 @@ On approval, run:
 ```
 /zoho-social-batch .claude/plans/feed-post-queue-{YYYYMMDD}.json
 ```
-with `schedule_mode: scheduled` so each post lands at its `schedule_at`.
-Cadence is 1/day at 9 PM EDT, starting the day after the last already-
-scheduled Zoho post. Never publish immediately; never use "Add to Queue".
+The manifest's `schedule_mode: spaced` makes `/zoho-social-batch` place each
+post in the next free 9 PM EDT slot (1/day), starting the day after the last
+already-scheduled Zoho post. Never publish immediately; never use
+"Add to Queue".
 
 ## Caveats
 
