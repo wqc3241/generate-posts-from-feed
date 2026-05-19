@@ -166,14 +166,20 @@ If 4a and 4b both fail, the Lovart prompt runs text-only.
 
 ## Step 5 — Generate the 8-second promo video
 
-For each product, build a highlight-reel prompt and call `/lovart-video`.
+For each product, build a three-act prompt and call `/lovart-video`. Lovart
+renders the full 8 seconds of clean footage; the branded title-card text is
+overlaid afterward in Step 6.
 
 **`product_short_name`** = `title` with the leading SKU/year/model prefix
 stripped (e.g. "K&N 16-23 Toyota Tacoma V6-3.5L Elevated Intake Kit (Snorkel)"
 → "K&N Tacoma Elevated Intake (Snorkel)").
 
 **`product_kind`** = a short category noun derived from `product_type`/title
-(e.g. "cold air intake", "sway bar", "coilovers", "fuel pump", "exhaust").
+(e.g. "cold air intake", "sway bar", "coilovers", "fuel pump", "wheel",
+"exhaust system", "brake kit").
+
+**`scene_vehicle`** = `{vehicle}` when `vehicle_source != universal`;
+otherwise the literal phrase `a matching performance vehicle`.
 
 **`ambience_cue`** by category:
 - intake/exhaust → `engine idle with a short confident rev`
@@ -181,17 +187,19 @@ stripped (e.g. "K&N 16-23 Toyota Tacoma V6-3.5L Elevated Intake Kit (Snorkel)"
 - brakes → `brake disc rotation hiss, subtle impact clicks`
 - other/accessory → `subtle workshop ambience, tools on metal`
 
-**Prompt template** (keep under 500 chars; include the vehicle only when
-`vehicle_source != universal`):
+**Three-act prompt template** (keep under 500 chars). This template is fixed —
+only `product_short_name`, `product_kind`, `scene_vehicle`, and `ambience_cue`
+are substituted, so it works for any kind of vehicle part:
 
 ```
-Cinematic 8-second vertical 9:16 product promo of {product_short_name}
-{for the {vehicle}}. Open on a clean studio hero shot of just the
-{product_kind} isolated on a seamless dark gradient backdrop, then transition
-through 3-4 rolling close-up detail shots from multiple angles. Soft
-cinematic lighting, subtle golden rim light, shallow depth of field,
-photorealistic, premium confident energy. {ambience_cue}. No text overlays,
-no logos, no watermarks — added in post.
+Vertical 9:16 720p 8-second cinematic product reel, set in one ultra-realistic
+modern performance shop garage, very smooth continuous camera motion,
+photorealistic. Seconds 0-1: clean centered hero shot of {product_short_name}
+({product_kind}) floating on a dark gradient backdrop. Seconds 1-4:
+ultra-realistic multi-angle orbiting overview of {scene_vehicle}. Seconds 4-8:
+smooth close-up multi-angle shots of the {product_kind} already installed on
+{scene_vehicle} at its correct mounting location. {ambience_cue}. No text, no
+logos, no watermarks — added in post.
 ```
 
 **Lovart settings (fixed for this skill).** Every `/lovart-video` call this
@@ -220,144 +228,139 @@ last line — capture that printed path (it equals the `--out` value). If it
 fails for a product, record the failure and skip that product's post (do not
 abort the whole run).
 
-## Step 6 — Branding overlay composite
+## Step 6 — Title-card + branding overlay
 
-Composite three overlays onto `raw.mp4` so they appear on frame 1 and every
-frame: NLP logo (top-right), brand logo (top-left), product-name label
-(bottom-center). Output `/tmp/feed-media/product-{handle}/{handle}.mp4`.
+Lovart's `raw.mp4` is clean footage. This step overlays the branded title
+card on the first second and a small persistent shop logo, producing
+`/tmp/feed-media/product-{handle}/{handle}.mp4`.
 
-### 6a. Resolve the asset cache
+The title card sits on top of Lovart's first-second product hero, in this
+layout: the NLP shop logo across the top, the product name in the
+upper-middle, and a tagline near the bottom — the dark gradient backdrop
+comes from the Lovart footage itself.
+
+### 6a. Resolve the NLP logo
 
 ```bash
-mkdir -p ~/.claude/assets/brand-logos
+mkdir -p ~/.claude/assets
 ```
 
-**NLP logo** — `~/.claude/assets/nlp-logo.png`. If
-`~/.claude/assets/nlp-logo.png` is absent, use the WebFetch tool on
-`https://nlpperformance.com` with a prompt asking for the site header logo
-image URL, then `curl -sL "<logo_url>" -o ~/.claude/assets/nlp-logo.png` and
-verify it with `file`. If unobtainable, skip the NLP overlay (do not abort).
+**NLP logo** — `~/.claude/assets/nlp-logo.png`. If absent, use the WebFetch
+tool on `https://nlpperformance.com` with a prompt asking for the site header
+logo image URL, then `curl -sL "<logo_url>" -o ~/.claude/assets/nlp-logo.png`
+and verify with `file`. If it cannot be obtained, the title card and the
+watermark render without the logo (text only) — do not abort.
 
-**Brand logo** — slug = `vendor` lowercased, non-alphanumeric → `-`
-(e.g. "K&N" → `k-n`). Path `~/.claude/assets/brand-logos/{slug}.png`.
-If missing: one `WebSearch` `"{vendor} logo png"`, `WebFetch` the top result
-for the image URL, `curl` it, verify with `file`. If unobtainable, skip the
-brand overlay (do not abort).
+### 6b. Render the title-card overlay PNG (Pillow)
 
-### 6b. Render the product-name label PNG (Pillow)
+Render one full-canvas 720×1280 transparent PNG carrying the shop logo (top),
+the product name (upper-middle, word-wrapped), and the tagline (lower). The
+center is left transparent so Lovart's product hero shows through.
+ImageMagick is not installed — use Pillow.
 
-ImageMagick is not installed — use Pillow. Word-wrap so the label never
-exceeds 85% of the 720px canvas width:
+The tagline is `For your {vehicle}` when `vehicle_source != universal`,
+otherwise the literal `Performance. Installed.`
 
 ```bash
-HANDLE="<handle>"            # the current product handle
+HANDLE="<handle>"                 # current product handle
 SHORT_NAME="<product_short_name>"
-python3 - "$SHORT_NAME" "/tmp/feed-media/product-$HANDLE/label.png" <<'PY'
-import sys
+TAGLINE="<tagline>"               # per the rule above
+LOGO="$HOME/.claude/assets/nlp-logo.png"   # may be absent — handled in-script
+python3 - "$SHORT_NAME" "$TAGLINE" "$LOGO" "/tmp/feed-media/product-$HANDLE/titlecard.png" <<'PY'
+import sys, os
 from PIL import Image, ImageDraw, ImageFont
-text = sys.argv[1]
-out_path = sys.argv[2]
-canvas_w, font_size, max_lines = 720, 44, 3
-max_text_w = int(canvas_w * 0.85)  # 612px
-# font: try Inter Bold, fall back to Arial Bold, then PIL default.
-font = None
-for p in ["/Library/Fonts/Inter-Bold.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"]:
-    try: font = ImageFont.truetype(p, font_size); break
-    except Exception: pass
-if font is None: font = ImageFont.load_default()
-probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-def measure(s): b = probe.textbbox((0, 0), s, font=font); return (b[2]-b[0], b[3]-b[1])
-def wrap(t, max_w, max_lines=3):
+short_name, tagline, logo_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+W, H = 720, 1280
+img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+d = ImageDraw.Draw(img)
+
+def load_font(size):
+    for p in ["/Library/Fonts/Inter-Bold.ttf",
+              "/System/Library/Fonts/Supplemental/Arial Bold.ttf"]:
+        try: return ImageFont.truetype(p, size)
+        except Exception: pass
+    return ImageFont.load_default()
+
+def measure(s, fnt):
+    b = d.textbbox((0, 0), s, font=fnt); return b[2]-b[0], b[3]-b[1]
+
+def wrap(t, fnt, max_w, max_lines):
     words, lines, cur = t.split(), [], ""
     for i, w in enumerate(words):
         trial = (cur + " " + w).strip()
-        if measure(trial)[0] <= max_w or not cur:
+        if measure(trial, fnt)[0] <= max_w or not cur:
             cur = trial
         else:
             lines.append(cur); cur = w
             if len(lines) == max_lines - 1:
                 rest = " ".join(words[i:])
-                while measure(rest)[0] > max_w and len(rest) > 3:
+                while measure(rest, fnt)[0] > max_w and len(rest) > 3:
                     rest = rest[:-1]
-                if measure(rest)[0] > max_w: rest = rest.rstrip() + "…"
+                if measure(rest, fnt)[0] > max_w: rest = rest.rstrip() + "…"
                 lines.append(rest); return lines
     if cur: lines.append(cur)
     return lines
-lines = wrap(text, max_text_w, max_lines)
-line_h = max(measure(l)[1] for l in lines) + 8
-pad = 20
-img_w = canvas_w
-img_h = line_h * len(lines) + pad * 2
-img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
-d = ImageDraw.Draw(img)
-y = pad
-for l in lines:
-    w = measure(l)[0]; x = (img_w - w) // 2
-    d.text((x, y), l, font=font, fill=(255,255,255,255),
-           stroke_width=3, stroke_fill=(0,0,0,255))
-    y += line_h
+
+def draw_centered(lines, fnt, y, gap=12):
+    for ln in lines:
+        w, h = measure(ln, fnt)
+        d.text(((W - w) // 2, y), ln, font=fnt, fill=(255, 255, 255, 255),
+               stroke_width=3, stroke_fill=(0, 0, 0, 235))
+        y += h + gap
+    return y
+
+# shop logo, centered in the top band
+if os.path.isfile(logo_path):
+    try:
+        logo = Image.open(logo_path).convert("RGBA")
+        lw = 300
+        logo = logo.resize((lw, max(1, round(logo.height * lw / logo.width))))
+        img.alpha_composite(logo, ((W - lw) // 2, 70))
+    except Exception:
+        pass
+
+# product name, upper-middle
+draw_centered(wrap(short_name, load_font(52), int(W * 0.86), 2), load_font(52), 330)
+# tagline, lower
+draw_centered(wrap(tagline, load_font(40), int(W * 0.86), 1), load_font(40), 1080)
+
 img.save(out_path)
 PY
 ```
 
 ### 6c. Composite with ffmpeg
 
-Pick the command matching which logos were obtained in Step 6a. The label PNG
-is always present; `[0:v]` is always the raw video.
+The title-card PNG shows only during seconds 0–1 (fading in then out); a small
+shop logo stays top-right for the whole clip. The raw video is first
+normalized to exactly 720×1280. Output is capped at 8 seconds.
 
-**All three (NLP + brand + label):**
+**With the NLP logo:**
 
 ```bash
 ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
+  -i /tmp/feed-media/product-{handle}/titlecard.png \
   -i ~/.claude/assets/nlp-logo.png \
-  -i ~/.claude/assets/brand-logos/{slug}.png \
-  -i /tmp/feed-media/product-{handle}/label.png \
   -filter_complex "
-    [1:v]scale=180:-2[nlp];
-    [2:v]scale=180:-2[brand];
-    [0:v][brand]overlay=20:20[a];
-    [a][nlp]overlay=W-w-20:20[b];
-    [b][3:v]overlay=(W-w)/2:H-h-80[v]
-  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
+    [0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1[base];
+    [1:v]format=rgba,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=0.85:d=0.15:alpha=1[tc];
+    [base][tc]overlay=0:0:enable='between(t,0,1)'[a];
+    [2:v]scale=96:-2[wm];
+    [a][wm]overlay=W-w-24:24[v]
+  " -map "[v]" -map 0:a? -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
   /tmp/feed-media/product-{handle}/{handle}.mp4
 ```
 
-**NLP + label only (brand logo missing):**
+**Without the NLP logo (Step 6a could not obtain it)** — drop the third input
+and the watermark nodes; the title-card overlay output is named `[v]` directly:
 
 ```bash
 ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
-  -i ~/.claude/assets/nlp-logo.png \
-  -i /tmp/feed-media/product-{handle}/label.png \
+  -i /tmp/feed-media/product-{handle}/titlecard.png \
   -filter_complex "
-    [1:v]scale=180:-2[nlp];
-    [0:v][nlp]overlay=W-w-20:20[a];
-    [a][2:v]overlay=(W-w)/2:H-h-80[v]
-  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
-  /tmp/feed-media/product-{handle}/{handle}.mp4
-```
-
-**Brand + label only (NLP logo missing):**
-
-```bash
-ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
-  -i ~/.claude/assets/brand-logos/{slug}.png \
-  -i /tmp/feed-media/product-{handle}/label.png \
-  -filter_complex "
-    [1:v]scale=180:-2[brand];
-    [0:v][brand]overlay=20:20[a];
-    [a][2:v]overlay=(W-w)/2:H-h-80[v]
-  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
-  /tmp/feed-media/product-{handle}/{handle}.mp4
-```
-
-**Label only (both logos missing):**
-
-```bash
-ffmpeg -y -i /tmp/feed-media/product-{handle}/raw.mp4 \
-  -i /tmp/feed-media/product-{handle}/label.png \
-  -filter_complex "
-    [0:v][1:v]overlay=(W-w)/2:H-h-80[v]
-  " -map "[v]" -map 0:a? -c:v libx264 -pix_fmt yuv420p -c:a copy \
+    [0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1[base];
+    [1:v]format=rgba,fade=t=in:st=0:d=0.2:alpha=1,fade=t=out:st=0.85:d=0.15:alpha=1[tc];
+    [base][tc]overlay=0:0:enable='between(t,0,1)'[v]
+  " -map "[v]" -map 0:a? -t 8 -c:v libx264 -pix_fmt yuv420p -c:a copy \
   /tmp/feed-media/product-{handle}/{handle}.mp4
 ```
 
