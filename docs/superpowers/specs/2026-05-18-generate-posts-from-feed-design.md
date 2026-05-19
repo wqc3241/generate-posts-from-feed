@@ -170,18 +170,26 @@ last line so callers can capture it. Non-zero exit on failure.
    Record `image_source` (`shopify` | `web-search` | `none`).
 
 **Step 5 — Generate the 8s promo video** via `/lovart-video`.
-Engineer a highlight-reel prompt per product: names `product_short_name` and
-the vehicle, specifies "8-second vertical 9:16," includes a category-based
-`ambience_cue`, and includes the negative-overlay clause ("no text overlays,
-no logos — added in post"). Downloaded product images are passed as `--ref`.
+Engineer a fixed **three-act** prompt per product (only `product_short_name`,
+`product_kind`, `scene_vehicle`, and `ambience_cue` are substituted, so it
+works for any vehicle part): seconds 0–1 a clean centered product hero on a
+dark gradient; seconds 1–4 an ultra-realistic multi-angle overview of the
+vehicle; seconds 4–8 close-up multi-angle shots of the product **installed on
+the vehicle** at its correct mounting location. Vertical 9:16, 720p, one
+ultra-realistic shop garage, very smooth camera, with the negative-overlay
+clause ("no text, no logos — added in post"). Lovart calls are pinned to
+`--mode thinking`, the NLP promo `--project-id`, and a Seedance 2.0 Fast
+`--prefer-models` hint. Downloaded product images are passed as `--ref`.
 Output to `/tmp/feed-media/product-{handle}/raw.mp4`.
 
-**Step 6 — Branding overlay composite.** Identical ffmpeg overlay step from
-`/generate-posts-from-reviews` Step 9: NLP logo top-right, brand logo (from
-`vendor` slug) top-left, word-wrapped product-name text bottom-center via
-Pillow. Produces the final `{handle}.mp4`. Reuses the shared asset cache
-`~/.claude/assets/nlp-logo.png`, `~/.claude/assets/brand-logos/{slug}.png`,
-and Inter Bold font.
+**Step 6 — Title-card + branding overlay.** Lovart renders all 8s clean; the
+branding is composited in post. A full-canvas 720×1280 title-card PNG (shop
+logo top, word-wrapped product name upper-middle, tagline lower — rendered
+with Pillow) is overlaid by ffmpeg **only over seconds 0–1** (fading in/out)
+on top of Lovart's product-hero opening, plus a small persistent NLP logo
+top-right. The raw video is normalized to exactly 720×1280 and capped at 8s.
+Produces the final `{handle}.mp4`. Reuses `~/.claude/assets/nlp-logo.png` and
+the Inter Bold font.
 
 **Step 7 — Generate post content** (product/vehicle-led; no customer quote).
 - Caption:
@@ -222,8 +230,10 @@ the last already-scheduled post. Parent skill's strict schedule rules apply.
 - Always append `Follow us for more promotions and content.` to every caption
   (between body and hashtags) and every first comment.
 - `product_short_name` strips the SKU year/model prefix from the title.
-- Brand-logo cache and download flow, font resolution, vendor slug rules, and
-  the ffmpeg overlay command are reused verbatim.
+- NLP logo cache (`~/.claude/assets/nlp-logo.png`) and font resolution
+  (Inter Bold → Arial Bold → default) follow the parent skill's conventions.
+  The overlay itself is the new title-card composite described in Step 6 — it
+  is *not* reused verbatim from the parent.
 
 ## Differences from the parent skill
 
