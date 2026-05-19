@@ -83,8 +83,11 @@ For each product, determine `{vehicle}` and record `vehicle_source`:
    known make and model in `title`, e.g. `16-23 Toyota Tacoma V6-3.5L`.
    Known makes: Toyota, Ford, Honda, Subaru, Chevrolet, Chevy, Jeep, RAM,
    Dodge, GMC, Nissan, Lexus, Mazda, Volkswagen, VW, BMW, Audi, Mercedes,
-   Hyundai, Kia, Tesla, Acura, Infiniti. Capture `{year_range} {make}
-   {model}` (drop the engine code from `{vehicle}` but keep make+model).
+   Mercedes-Benz, Hyundai, Kia, Tesla, Acura, Infiniti, Porsche, Mitsubishi,
+   Mini, Scion, Pontiac, Cadillac, Buick, Chrysler, Lincoln, Land Rover,
+   Range Rover, Genesis, Volvo, Jaguar, Fiat, Alfa Romeo, Maserati, Suzuki.
+   Capture `{year_range} {make} {model}` (drop the engine code from
+   `{vehicle}` but keep make+model).
 2. **Fitment table in `body_html`** (`vehicle_source = fitment-table`).
    If the title yields nothing, parse `body_html` for an HTML `<table>` whose
    header row contains Year/Make/Model columns; take the make+model (if
